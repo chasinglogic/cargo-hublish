@@ -51,3 +51,11 @@ impl Release {
         self
     }
 }
+
+
+#[derive(Deserialize, Debug)]
+pub struct ReleaseResponse {
+    pub url: String,
+    pub html_url: String,
+    pub upload_url: String,
+}
