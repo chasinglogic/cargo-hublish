@@ -10,14 +10,20 @@ extern crate hyper;
 extern crate hyper_native_tls;
 extern crate getopts;
 extern crate git2;
+extern crate ioutil;
+extern crate base64;
 
 use std::process;
+use base64::encode;
 use std::io::Read;
 use std::path::PathBuf;
 use utils::get_project_root;
-use utils::read_file;
+use ioutil::read_file;
+use ioutil::prompt;
 use hyper::Client;
+use hyper::client;
 use hyper::status::StatusCode;
+use hyper::header;
 use hyper::net::HttpsConnector;
 use hyper_native_tls::NativeTlsClient;
 use release::Release;
@@ -64,7 +70,7 @@ fn main() {
                                 defaults to false");
     opts.optflag("p", "prerelease", "Set whether this is a prerelease \
                                      defaults to false");
-    opts.optopt("u", "url", "URL for the github API request. \
+    opts.optopt("", "url", "URL for the github API request. \
                               cargo-hublish attempts to find this \
                               based on the origin url of the git repo. \
                               If you're using a different remote such \
@@ -75,6 +81,12 @@ fn main() {
     opts.optopt("r", "remote", "Remote name to use when generating \
                                  API endpoint. Defaults to origin.",
                  "REMOTE");
+    opts.optopt("u", "username", "Your github username. If not \
+                                  provided you will be prompted.",
+                 "USERNAME");
+    opts.optopt("p", "password", "Your github password. If not \
+                                  provided you will be prompted.",
+                 "PASSWORD");
 
     let m = match opts.parse(&args) {
         Ok(m) => m,
@@ -96,20 +108,18 @@ fn main() {
 
     let mut manifest = project_root.clone();
     manifest.push("Cargo.toml");
-    let content = read_file(&manifest);
+    let content = read_file(&manifest).unwrap();
     let cfg: Cargo = toml::from_str(&content).unwrap();
 
     let json = Release::new()
         .name(release_name(&m, &cfg))
         .tag_name(tag_name(&m, &cfg))
-        .body(body(&m, &cfg))
+        .body(body(&m))
         .target_commitsh(target_commit(&m))
         .prerelease(m.opt_present("prerelease"))
         .draft(m.opt_present("draft"))
         .to_json()
         .unwrap();
-
-    println!("json: {}", json);
 
     let repo = match git2::Repository::open(project_root) {
         Ok(r) => r,
@@ -119,7 +129,9 @@ fn main() {
         }
     };
 
-    let remote_name = m.opt_str("remote").unwrap_or("origin".to_string());
+    let remote_name = m.opt_str("remote")
+        .unwrap_or_else(|| "origin".to_string());
+
     let origin = match repo.find_remote(&remote_name) {
         Ok(o) => o,
         Err(e) => {
@@ -142,16 +154,66 @@ fn main() {
         base
     };
 
-    println!("url: {}", url);
+    println!("Release {} \
+              \nAbout to Create at: {}", json, url);
 
+    let ans = prompt("Is this correct? Y/n: ")
+        .expect("Error reading from stdin.");
+    if ans.to_lowercase().starts_with('n') {
+        println!("Aborting release...");
+        process::exit(0)
+    }
+
+    let unpw = get_username_password(&m);
+    let auth = header::Authorization(format!("Basic {}", unpw));
+
+    let mut headers = header::Headers::new();
+    headers.set(auth);
+    headers.set(header::UserAgent("cargo-hublish".to_string()));
+
+    // Set up SSL support for hyper.
     let ssl = NativeTlsClient::new().unwrap();
     let connector = HttpsConnector::new(ssl);
-    let client = Client::with_connector(connector);
+
+    // Hyper hates me so this was way harder than it should have been.
+    let proxy_url;
+    let ssl2;
+    let client = if let Ok(proxy) = env::var("HTTP_PROXY") {
+        // Easier than parsing myself
+        proxy_url = hyper::Url::parse(&proxy).unwrap();
+
+        // The proxy client needs it's own ssl client. Since
+        // NativeTlsClient doesn't support clone we have to make a new
+        // one.
+        ssl2 = NativeTlsClient::new().unwrap();
+
+        // Build our proxy config.
+        let pc = client::ProxyConfig::new(
+            proxy_url.scheme().clone(),
+            // This has to be valid for static lifteime, because
+            // reasons.
+            proxy_url.host_str()
+                .unwrap()
+                .to_string()
+                .clone(),
+            proxy_url.port().unwrap_or(80),
+            connector,
+            ssl2
+        );
+
+        Client::with_proxy_config(pc)
+    } else {
+        Client::with_connector(connector)
+    };
+
+    println!("Sending request...");
     let mut res = client.post(&url)
+        .headers(headers)
         .body(&json)
         .send()
         .expect("Error calling github API.");
 
+    println!("Reading response...");
     let mut buf = String::new();
     res.read_to_string(&mut buf)
         .expect("Unable to read Github response.");
@@ -195,13 +257,33 @@ fn target_commit(m: &getopts::Matches) -> String {
 }
 
 
-fn body(m: &getopts::Matches, cfg: &Cargo) -> String {
+fn body(m: &getopts::Matches) -> String {
     if m.opt_present("message") {
         m.opt_str("message").unwrap().to_string()
     } else if m.opt_present("file") {
         let p = PathBuf::from(m.opt_str("file").unwrap());
-        read_file(&p)
+        read_file(&p).unwrap()
     } else {
         "".to_string()
     }
+}
+
+
+fn get_username_password(m: &getopts::Matches) -> String {
+    let username = if m.opt_present("username") {
+        m.opt_str("username")
+            .expect("username requires an argument")
+    } else {
+        prompt("Github Username: ").unwrap()
+    };
+
+    let password = if m.opt_present("password") {
+        m.opt_str("password")
+            .expect("password requires an argument")
+    } else {
+        prompt("Github Password: ").unwrap()
+    };
+
+    let com = format!("{}:{}", username, password);
+    encode(&com)
 }
