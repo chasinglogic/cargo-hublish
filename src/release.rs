@@ -1,3 +1,5 @@
+use serde_json;
+
 #[derive(Serialize, Debug, Default)]
 pub struct Release {
     pub tag_name: String,
@@ -49,6 +51,10 @@ impl Release {
     pub fn draft(mut self, draft: bool) -> Release {
         self.draft = draft;
         self
+    }
+
+    pub fn to_json(&self) -> serde_json::Result<String> {
+        serde_json::to_string_pretty(self)
     }
 }
 
