@@ -7,6 +7,7 @@ extern crate serde;
 extern crate serde_json;
 extern crate toml;
 extern crate hyper;
+extern crate hyper_native_tls;
 extern crate getopts;
 extern crate git2;
 
@@ -17,6 +18,8 @@ use utils::get_project_root;
 use utils::read_file;
 use hyper::Client;
 use hyper::status::StatusCode;
+use hyper::net::HttpsConnector;
+use hyper_native_tls::NativeTlsClient;
 use release::Release;
 use release::ReleaseResponse;
 use getopts::Options;
@@ -95,49 +98,17 @@ fn main() {
     manifest.push("Cargo.toml");
     let content = read_file(&manifest);
     let cfg: Cargo = toml::from_str(&content).unwrap();
-    println!("cfg: {:?}", cfg);
 
-    let rel_name = if m.opt_present("name") {
-        m.opt_str("name")
-            .expect("name requires an argument")
-    } else {
-        format!("{} v{}", cfg.package.name,
-                cfg.package.version.clone())
-    };
-
-    let tag_name = if m.opt_present("tag") {
-        m.opt_str("tag_name")
-            .expect("tag_name requires an argument")
-    } else {
-        cfg.package.version
-    };
-
-    let target_commit = if m.opt_present("commit") {
-        m.opt_str("commit")
-            .expect("commit requires an argument")
-    } else {
-        "master".to_string()
-    };
-
-    let body = if m.opt_present("message") {
-        m.opt_str("message").unwrap().to_string()
-    } else if m.opt_present("file") {
-        let p = PathBuf::from(m.opt_str("file").unwrap());
-        read_file(&p)
-    } else {
-        "".to_string()
-    };
-
-
-    let rel = Release::new()
-        .name(rel_name)
-        .tag_name(tag_name)
-        .body(body)
-        .target_commitsh(target_commit)
+    let json = Release::new()
+        .name(release_name(&m, &cfg))
+        .tag_name(tag_name(&m, &cfg))
+        .body(body(&m, &cfg))
+        .target_commitsh(target_commit(&m))
         .prerelease(m.opt_present("prerelease"))
-        .draft(m.opt_present("draft"));
+        .draft(m.opt_present("draft"))
+        .to_json()
+        .unwrap();
 
-    let json = serde_json::to_string(&rel).unwrap();
     println!("json: {}", json);
 
     let repo = match git2::Repository::open(project_root) {
@@ -173,7 +144,9 @@ fn main() {
 
     println!("url: {}", url);
 
-    let client = Client::new();
+    let ssl = NativeTlsClient::new().unwrap();
+    let connector = HttpsConnector::new(ssl);
+    let client = Client::with_connector(connector);
     let mut res = client.post(&url)
         .body(&json)
         .send()
@@ -191,4 +164,44 @@ fn main() {
     let rr: ReleaseResponse = serde_json::from_str(&buf).unwrap();
     println!("Successfully created release!
 View it here: {}", rr.html_url);
+}
+
+fn release_name(m: &getopts::Matches, cfg: &Cargo) -> String {
+    if m.opt_present("name") {
+        return m.opt_str("name")
+            .expect("name requires an argument")
+    }
+
+    format!("{} v{}", cfg.package.name,
+            cfg.package.version.clone())
+}
+
+fn tag_name(m: &getopts::Matches, cfg: &Cargo) -> String {
+    if m.opt_present("tag") {
+        return m.opt_str("tag_name")
+            .expect("tag_name requires an argument")
+    }
+
+    cfg.package.version.clone()
+}
+
+
+fn target_commit(m: &getopts::Matches) -> String {
+    if m.opt_present("commit") {
+        return m.opt_str("commit").unwrap()
+    }
+
+    "master".to_string()
+}
+
+
+fn body(m: &getopts::Matches, cfg: &Cargo) -> String {
+    if m.opt_present("message") {
+        m.opt_str("message").unwrap().to_string()
+    } else if m.opt_present("file") {
+        let p = PathBuf::from(m.opt_str("file").unwrap());
+        read_file(&p)
+    } else {
+        "".to_string()
+    }
 }
