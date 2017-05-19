@@ -53,9 +53,9 @@ fn main() {
                               defined in Cargo.toml. Example: \
                               cargo-hublish v0.1.0",
                 "NAME");
-    opts.optopt("t", "tag", "Name of the git tag for the release, \
-                             if not set defaults to version number as \
-                             defined in Cargo.toml.",
+    opts.optopt("t", "tag_name", "Name of the git tag for the release, \
+                                  if not set defaults to version \
+                                  number as defined in Cargo.toml.",
                 "TAG_NAME");
     opts.optopt("c", "commit", "SHA of the commit the tag should \
                                 point to, defaults to HEAD of master.",
