@@ -5,7 +5,8 @@ authors = ["Mathew Robinson <mrobinson@praelatus.io>"]
 description = "A cargo subcommand for publishing Rust projects to github."
 readme = "./README.md"
 license = "Apache-2.0"
-license-file ="./LICENSE"
+repository = "https://github.com/chasinglogic/cargo-hublish"
+documentation = "https://github.com/chasinglogic/cargo-hublish/blob/master/README.md"
 
 [dependencies]
 getopts = "0.2.14"
