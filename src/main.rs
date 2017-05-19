@@ -170,42 +170,9 @@ fn main() {
     let mut headers = header::Headers::new();
     headers.set(auth);
     headers.set(header::UserAgent("cargo-hublish".to_string()));
+    headers.set_raw("Accepts", vec![b"application/vnd.github.v3+json".to_vec()]);
 
-    // Set up SSL support for hyper.
-    let ssl = NativeTlsClient::new().unwrap();
-    let connector = HttpsConnector::new(ssl);
-
-    // Hyper hates me so this was way harder than it should have been.
-    let proxy_url;
-    let ssl2;
-    let client = if let Ok(proxy) = env::var("HTTP_PROXY") {
-        // Easier than parsing myself
-        proxy_url = hyper::Url::parse(&proxy).unwrap();
-
-        // The proxy client needs it's own ssl client. Since
-        // NativeTlsClient doesn't support clone we have to make a new
-        // one.
-        ssl2 = NativeTlsClient::new().unwrap();
-
-        // Build our proxy config.
-        let pc = client::ProxyConfig::new(
-            proxy_url.scheme().clone(),
-            // This has to be valid for static lifteime, because
-            // reasons.
-            proxy_url.host_str()
-                .unwrap()
-                .to_string()
-                .clone(),
-            proxy_url.port().unwrap_or(80),
-            connector,
-            ssl2
-        );
-
-        Client::with_proxy_config(pc)
-    } else {
-        Client::with_connector(connector)
-    };
-
+    let client = build_client();
     println!("Sending request...");
     let mut res = client.post(&url)
         .headers(headers)
@@ -219,13 +186,14 @@ fn main() {
         .expect("Unable to read Github response.");
 
     if res.status >= StatusCode::MultipleChoices {
-        println!("ERROR Status: {} Response: {}", res.status, buf);
+        println!("Error creating release\nStatus: {}\nResponse: {}",
+                 res.status, buf);
         process::exit(1)
     }
 
     let rr: ReleaseResponse = serde_json::from_str(&buf).unwrap();
-    println!("Successfully created release!
-View it here: {}", rr.html_url);
+    println!("Successfully created release! \
+              View it here: {}", rr.html_url);
 }
 
 fn release_name(m: &getopts::Matches, cfg: &Cargo) -> String {
@@ -274,16 +242,66 @@ fn get_username_password(m: &getopts::Matches) -> String {
         m.opt_str("username")
             .expect("username requires an argument")
     } else {
-        prompt("Github Username: ").unwrap()
+        // prompt returns the traling newline character. So we have to
+        // remove it
+        let mut inp = prompt("Github Username: ").unwrap();
+        inp.pop();
+        inp
     };
 
     let password = if m.opt_present("password") {
         m.opt_str("password")
             .expect("password requires an argument")
     } else {
-        prompt("Github Password: ").unwrap()
+        // prompt returns the traling newline character. So we have to
+        // remove it
+        let mut inp = prompt("Github Password: ").unwrap();
+        inp.pop();
+        inp
     };
+
+    println!("Username: {}", username);
+    println!("Password: {}", password);
 
     let com = format!("{}:{}", username, password);
     encode(&com)
+}
+
+
+fn build_client() -> Client {
+    // Set up SSL support for hyper.
+    let ssl = NativeTlsClient::new().unwrap();
+    let connector = HttpsConnector::new(ssl);
+
+    // Hyper hates me so this was way harder than it should have been.
+    let proxy_url;
+    let ssl2;
+
+    if let Ok(proxy) = env::var("HTTP_PROXY") {
+        // Easier than parsing myself
+        proxy_url = hyper::Url::parse(&proxy).unwrap();
+
+        // The proxy client needs it's own ssl client. Since
+        // NativeTlsClient doesn't support clone we have to make a new
+        // one.
+        ssl2 = NativeTlsClient::new().unwrap();
+
+        // Build our proxy config.
+        let pc = client::ProxyConfig::new(
+            proxy_url.scheme(),
+            // This has to be valid for static lifteime, because
+            // reasons.
+            proxy_url.host_str()
+                .unwrap()
+                .to_string()
+                .clone(),
+            proxy_url.port().unwrap_or(80),
+            connector,
+            ssl2
+        );
+
+        Client::with_proxy_config(pc)
+    } else {
+        Client::with_connector(connector)
+    }
 }
