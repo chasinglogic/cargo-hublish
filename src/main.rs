@@ -146,12 +146,10 @@ fn main() {
     } else {
         let u = origin.url().expect("Unexpected error.");
         let mut spl: Vec<&str> = u.split('/').collect();
-        let mut base = "https://api.github.com/".to_string();
         let repo_name = spl.pop().unwrap();
         let username = spl.pop().unwrap();
-        let endpoint = format!("{}/{}/releases", username, repo_name);
-        base.push_str(&endpoint);
-        base
+        format!("https://api.github.com/repos/{}/{}/releases",
+                username, repo_name)
     };
 
     println!("Release {} \
@@ -273,7 +271,9 @@ fn build_client() -> Client {
     let ssl = NativeTlsClient::new().unwrap();
     let connector = HttpsConnector::new(ssl);
 
-    // Hyper hates me so this was way harder than it should have been.
+    // Hyper has made some interesting design decisions in regards to
+    // ssl and proxies so this was way harder than it should have
+    // been.
     let proxy_url;
     let ssl2;
 
