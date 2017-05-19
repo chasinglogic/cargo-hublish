@@ -47,7 +47,6 @@ fn main() {
     let mut opts = Options::new();
     let args: Vec<String> = env::args().collect();
 
-    // opts.optflag("g", "git", "Create the appropriate tags using git")
     opts.optflag("h", "help", "Show this help message.");
     opts.optopt("n", "name", "Name of the release. Defaults to \
                               package name + version number as \
@@ -59,7 +58,7 @@ fn main() {
                              defined in Cargo.toml.",
                 "TAG_NAME");
     opts.optopt("c", "commit", "SHA of the commit the tag should \
-                                point to, defaults to HEAD of master",
+                                point to, defaults to HEAD of master.",
                 "COMMIT");
     opts.optopt("f", "file", "A file which contains the markdown for \
                               the body (description) of the release",
@@ -71,19 +70,19 @@ fn main() {
     opts.optflag("p", "prerelease", "Set whether this is a prerelease \
                                      defaults to false");
     opts.optopt("", "url", "URL for the github API request. \
-                              cargo-hublish attempts to find this \
-                              based on the origin url of the git repo. \
-                              If you're using a different remote such \
-                              as 'github' then use the --remote flag \
-                              to set that name, otherwise set the \
-                              full api url with this flag.",
-                 "URL");
+                            cargo-hublish attempts to find this \
+                            based on the origin url of the git repo. \
+                            If you're using a different remote such \
+                            as 'github' then use the --remote flag \
+                            to set that name, otherwise set the \
+                            full api url with this flag.",
+                "URL");
     opts.optopt("r", "remote", "Remote name to use when generating \
-                                 API endpoint. Defaults to origin.",
-                 "REMOTE");
+                                API endpoint. Defaults to origin.",
+                "REMOTE");
     opts.optopt("u", "username", "Your github username. If not \
                                   provided you will be prompted.",
-                 "USERNAME");
+                "USERNAME");
     opts.optopt("p", "password", "Your github password. If not \
                                   provided you will be prompted.",
                  "PASSWORD");
@@ -94,7 +93,9 @@ fn main() {
     };
 
     if m.opt_present("help") {
-        print!("{}", opts.usage("Usage: cargo hublish [options]"));
+        print!("{}", opts.usage("\nPublish Rust projects to Github \
+                                 Releases \n\nUsage: \
+                                 cargo hublish [options]"));
         process::exit(0)
     }
 
