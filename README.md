@@ -90,3 +90,15 @@ Options:
 						prompted.
 
 ```
+
+You can run `cargo hublish` without any flags and it will generate a
+Github release with reasonable defaults. It will always prompt you
+with the generated release so you can make sure it all looks good
+before sending off to Github. If you have not set the environment
+variable `$GITHUB_API_TOKEN` and have not passed in the `--username`
+and `--password` flags you will be prompted to login before the
+request is sent off. I highly recommend generating an API token and
+setting the environment variable `GITHUB_API_TOKEN` to it. When this
+is done `cargo hublish` will automatically read that and authenticate
+the request using it. This prevents you having to store your plain
+text password and/or logging in every time.
