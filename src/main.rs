@@ -163,11 +163,8 @@ fn main() {
         process::exit(0)
     }
 
-    let unpw = get_username_password(&m);
-    let auth = header::Authorization(format!("Basic {}", unpw));
-
     let mut headers = header::Headers::new();
-    headers.set(auth);
+    headers.set(header::Authorization(get_auth_header(&m)));
     headers.set(header::UserAgent("cargo-hublish".to_string()));
     headers.set_raw("Accepts", vec![b"application/vnd.github.v3+json".to_vec()]);
 
@@ -206,7 +203,7 @@ fn release_name(m: &getopts::Matches, cfg: &Cargo) -> String {
 }
 
 fn tag_name(m: &getopts::Matches, cfg: &Cargo) -> String {
-    if m.opt_present("tag") {
+    if m.opt_present("tag_name") {
         return m.opt_str("tag_name")
             .expect("tag_name requires an argument")
     }
@@ -236,7 +233,12 @@ fn body(m: &getopts::Matches) -> String {
 }
 
 
-fn get_username_password(m: &getopts::Matches) -> String {
+fn get_auth_header(m: &getopts::Matches) -> String {
+    if let Ok(token) = env::var("GITHUB_API_TOKEN") {
+        println!("Github API token detected...");
+        return format!("token {}", token)
+    }
+
     let username = if m.opt_present("username") {
         m.opt_str("username")
             .expect("username requires an argument")
@@ -263,7 +265,7 @@ fn get_username_password(m: &getopts::Matches) -> String {
     println!("Password: {}", password);
 
     let com = format!("{}:{}", username, password);
-    encode(&com)
+    format!("Basic {}", encode(&com))
 }
 
 
