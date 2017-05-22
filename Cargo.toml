@@ -1,6 +1,6 @@
 [package]
 name = "cargo-hublish"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Mathew Robinson <mrobinson@praelatus.io>"]
 description = "A cargo subcommand for publishing Rust projects to github."
 readme = "./README.md"
